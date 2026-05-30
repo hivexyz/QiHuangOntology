@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qihuang-shield-postgres
+    environment:
+      POSTGRES_DB: qihuang_shield
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - qihuang-shield-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d qihuang_shield"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  neo4j:
+    image: neo4j:5.26-community
+    container_name: qihuang-shield-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/neo4j_password
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 512m
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - qihuang-shield-neo4j-data:/data
+      - qihuang-shield-neo4j-logs:/logs
+
+volumes:
+  qihuang-shield-postgres-data:
+  qihuang-shield-neo4j-data:
+  qihuang-shield-neo4j-logs:
