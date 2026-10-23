@@ -15,7 +15,11 @@ def login(
     request: Request,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> SuccessEnvelope:
-    data = auth_service.login(payload.email, payload.password)
+    data = auth_service.login(
+        payload.email,
+        payload.password,
+        client_ip=request.client.host if request.client else None,
+    )
     return SuccessEnvelope(trace_id=request.state.trace_id, data=data)
 
 

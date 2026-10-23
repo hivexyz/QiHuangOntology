@@ -2,7 +2,7 @@
 name = "qihuang-shield"
 version = "0.1.0"
 description = "QiHuang Shield MVP FastAPI skeleton"
-readme = "../../docs/design/QiHuang_Shield_Data_API_Design.md"
+readme = "README.md"
 requires-python = ">=3.11"
 authors = [
   { name = "OpenAI Codex" }
@@ -12,7 +12,11 @@ dependencies = [
   "uvicorn>=0.35.0,<1.0.0",
   "pydantic>=2.11.0,<3.0.0",
   "psycopg[binary]>=3.2.0,<4.0.0",
-  "neo4j>=5.28.0,<6.0.0"
+  "neo4j>=5.28.0,<6.0.0",
+  "rdflib>=7.1.0,<8.0.0",
+  "owlready2>=0.47,<1.0.0",
+  "pymilvus>=2.5.0,<3.0.0",
+  "pypdf>=5.7.0,<6.0.0"
 ]
 
 [project.optional-dependencies]

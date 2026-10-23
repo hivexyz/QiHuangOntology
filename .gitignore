@@ -12,6 +12,9 @@ __pycache__/
 # Node
 node_modules/
 dist/
+*.tsbuildinfo
+src/frontend/vite.config.js
+src/frontend/vite.config.d.ts
 
 # Local env / secrets
 .env

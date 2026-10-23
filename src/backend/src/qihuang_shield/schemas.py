@@ -7,13 +7,9 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from .enums import (
-    BatchStatus,
     ContentType,
     Decision,
     EvidenceType,
-    FeedbackType,
-    RecommendedAction,
-    ReviewTaskStatus,
     RiskLevel,
     RoleCode,
     RuleType,
@@ -52,6 +48,37 @@ class UserProfile(BaseSchema):
     roles: list[RoleCode] = Field(default_factory=list)
 
 
+class TenantRole(BaseSchema):
+    tenant_id: UUID
+    tenant_code: str
+    role: RoleCode
+
+
+class CurrentUserProfile(UserProfile):
+    tenant_roles: list[TenantRole] = Field(default_factory=list)
+    current_tenant_id: UUID | None = None
+    current_tenant_code: str | None = None
+
+
+class RequestContext(BaseSchema):
+    trace_id: str
+    actor_type: Literal["user", "api_client"] = "user"
+    actor_user_id: UUID | None = None
+    actor_client_id: UUID | None = None
+    tenant_id: UUID | None = None
+    tenant_code: str | None = None
+    roles: list[RoleCode] = Field(default_factory=list)
+    auth_method: Literal["bearer", "api_key", "oauth"] = "bearer"
+    user: CurrentUserProfile | None = None
+
+
+class PermissionDecision(BaseSchema):
+    allowed: bool
+    action: str
+    resource: str
+    reason: str | None = None
+
+
 class LoginRequest(BaseSchema):
     email: str
     password: str
@@ -62,30 +89,6 @@ class LoginResponseData(BaseSchema):
     token_type: Literal["Bearer"] = "Bearer"
     expires_in: int = 7200
     user: UserProfile
-
-
-class ModerationMetadata(BaseSchema):
-    author_id: str | None = None
-    source: str | None = None
-
-
-class ModerationSyncRequest(BaseSchema):
-    content_id: str = Field(..., min_length=1, max_length=128)
-    content_text: str = Field(..., min_length=1)
-    content_type: ContentType = ContentType.OTHER
-    scenario: Scenario = Scenario.OTHER
-    policy_id: str | None = None
-    tenant_id: str = Field(..., min_length=1, max_length=64)
-    metadata: ModerationMetadata = Field(default_factory=ModerationMetadata)
-
-
-class RuleHit(BaseSchema):
-    rule_id: str
-    rule_name: str
-    rule_version: str
-    risk_level: str
-    decision: str
-    reason: str
 
 
 class ExtractedEntity(BaseSchema):
@@ -112,132 +115,330 @@ class OntologyFact(BaseSchema):
     relation: str
     object: str
     kb_version: str
+    assertion_id: str | None = None
+    evidence_ids: list[str] = Field(default_factory=list)
+    document_id: str | None = None
+    source_uri: str | None = None
+    source_title: str | None = None
+    snapshot_uri: str | None = None
 
 
-class ModerationSyncResponse(BaseSchema):
-    status: Literal["success"] = "success"
-    trace_id: str
-    content_id: str
-    decision: str
-    risk_level: str
-    confidence: float
-    fallback_triggered: bool = False
-    hit_rules: list[RuleHit] = Field(default_factory=list)
-    entities: list[ExtractedEntity] = Field(default_factory=list)
-    evidence_spans: list[EvidenceSpan] = Field(default_factory=list)
-    ontology_facts: list[OntologyFact] = Field(default_factory=list)
-    explanation: str
-    recommended_action: str
-
-
-class BatchItemRequest(BaseSchema):
-    content_id: str = Field(..., min_length=1, max_length=128)
-    content_text: str = Field(..., min_length=1)
-    content_type: ContentType = ContentType.OTHER
-    scenario: Scenario = Scenario.OTHER
-    metadata: ModerationMetadata = Field(default_factory=ModerationMetadata)
-
-
-class CreateBatchRequest(BaseSchema):
-    batch_name: str | None = None
-    tenant_id: str = Field(..., min_length=1, max_length=64)
-    policy_id: str | None = None
-    callback_url: str | None = None
-    items: list[BatchItemRequest] = Field(..., min_length=1)
-
-
-class BatchCreateData(BaseSchema):
-    batch_id: UUID
-    status: BatchStatus
-    total_count: int
-    query_url: str
-
-
-class BatchStatusData(BaseSchema):
-    batch_id: UUID
-    status: BatchStatus
-    total_count: int
-    processed_count: int
-    success_count: int
-    failed_count: int
-    created_at: datetime
-    started_at: datetime | None = None
-    finished_at: datetime | None = None
-
-
-class BatchItemResult(BaseSchema):
-    request_id: UUID
-    trace_id: str
-    content_id: str
-    decision: str
-    risk_level: str
-    fallback_triggered: bool = False
-    created_at: datetime
-
-
-class ReviewTaskListItem(BaseSchema):
-    task_id: UUID
-    content_id: str
-    decision: str
-    risk_level: str
-    hit_rules: list[str] = Field(default_factory=list)
-    status: ReviewTaskStatus
-    created_at: datetime
-
-
-class ReviewTaskAssignee(BaseSchema):
-    user_id: UUID
-    display_name: str
+class SemanticTrace(BaseSchema):
+    mention_id: str | None = None
+    normalization_decision_id: str | None = None
+    concept_id: str | None = None
+    assertion_id: str | None = None
+    condition_set_id: str | None = None
+    evidence_ids: list[str] = Field(default_factory=list)
+    projection_type: str | None = None
+    projection_version: str | None = None
 
 
 class KnowledgeCard(BaseSchema):
     entity: dict[str, Any]
     aliases: list[str] = Field(default_factory=list)
     effects: list[str] = Field(default_factory=list)
+    diseases: list[str] = Field(default_factory=list)
+    symptoms: list[str] = Field(default_factory=list)
+    patterns: list[str] = Field(default_factory=list)
+    treatment_methods: list[str] = Field(default_factory=list)
+    usage_methods: list[str] = Field(default_factory=list)
     not_for_populations: list[str] = Field(default_factory=list)
     allowed_contexts: list[str] = Field(default_factory=list)
     prohibited_contexts: list[str] = Field(default_factory=list)
     contraindications: list[dict[str, Any]] = Field(default_factory=list)
     kb_version: str
+    assertion_count: int = 0
+    evidence_count: int = 0
+    derived_from_assertions: bool = False
+    projection_type: Literal["knowledge_card"] = "knowledge_card"
+    projection_version: str = "projection-v1"
 
 
-class ReviewTaskDetail(BaseSchema):
-    task_id: UUID
-    status: ReviewTaskStatus
-    content_id: str
-    content_text: str
-    decision: str
-    risk_level: str
-    assignee: ReviewTaskAssignee | None = None
-    hit_rules: list[RuleHit] = Field(default_factory=list)
-    entities: list[ExtractedEntity] = Field(default_factory=list)
-    evidence_spans: list[EvidenceSpan] = Field(default_factory=list)
-    ontology_facts: list[OntologyFact] = Field(default_factory=list)
-    knowledge_card: KnowledgeCard | None = None
-    feedback: list[dict[str, Any]] = Field(default_factory=list)
+class KnowledgeCardProjection(KnowledgeCard):
+    """Read model projected from concepts/assertions/evidence for UI consumption."""
+
+
+class OntologyAssertionView(BaseSchema):
+    assertion_id: str
+    subject_entity_id: str
+    predicate_type: str
+    object_entity_id: str | None = None
+    object_value: str | None = None
+    kb_version: str
+    status: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    document_id: str | None = None
+    review_status: str | None = None
+    review_reason: str | None = None
+    reviewed_by: str | None = None
+    reviewed_at: datetime | None = None
+
+
+class EvidenceSourceView(BaseSchema):
+    evidence_id: str
+    kb_version: str
+    source_type: str
+    source_uri: str | None = None
+    source_title: str | None = None
+    source_text: str
+    entity_id: str | None = None
+    status: str
+    document_id: str | None = None
+
+
+class GuidelineDocumentView(BaseSchema):
+    document_id: str
+    kb_version: str
+    source_uri: str | None = None
+    title: str | None = None
+    source_type: str
+    status: str
+
+
+class KnowledgeCardDetail(KnowledgeCard):
+    assertions: list[OntologyAssertionView] = Field(default_factory=list)
+    evidence_sources: list[EvidenceSourceView] = Field(default_factory=list)
+    guideline_documents: list[GuidelineDocumentView] = Field(default_factory=list)
+    concept_id: str | None = None
+
+
+class OntologyConceptDetail(BaseSchema):
+    concept: OntologyEntityView
+    assertions: list[OntologyAssertionView] = Field(default_factory=list)
+    evidence_sources: list[EvidenceSourceView] = Field(default_factory=list)
+    guideline_documents: list[GuidelineDocumentView] = Field(default_factory=list)
+    related_diseases: list[OntologyEntityView] = Field(default_factory=list)
+    related_symptoms: list[OntologyEntityView] = Field(default_factory=list)
+    related_patterns: list[OntologyEntityView] = Field(default_factory=list)
+    related_principles: list[OntologyEntityView] = Field(default_factory=list)
+    related_methods: list[OntologyEntityView] = Field(default_factory=list)
+    related_formulas: list[OntologyEntityView] = Field(default_factory=list)
+    related_herbs: list[OntologyEntityView] = Field(default_factory=list)
+    related_usage_methods: list[OntologyEntityView] = Field(default_factory=list)
+
+
+
+
+class OntologyVersionView(BaseSchema):
+    version_id: str
+    version_type: str
+    version_name: str
+    based_on_version: str | None = None
+    change_summary: str | None = None
+    change_scope: list[str] = Field(default_factory=list)
     created_at: datetime
-    completed_at: datetime | None = None
+    created_by: str
+    review_status: str
+    reviewed_by: str | None = None
+    published_at: datetime | None = None
+    status: str
 
 
-class ClaimReviewTaskRequest(BaseSchema):
-    operator_user_id: UUID
+class RelationDefinitionView(BaseSchema):
+    relation_code: str
+    display_name_zh: str
+    definition: str
+    domain: list[str] = Field(default_factory=list)
+    range: list[str] = Field(default_factory=list)
+    semantic_direction: str | None = None
+    inverse_relation: str | None = None
+    boundary_note: str | None = None
+    condition_note: str | None = None
+    schema_version: str
+    status: str
 
 
-class SubmitReviewTaskRequest(BaseSchema):
-    operator_user_id: UUID
-    final_decision: Decision
-    final_action: RecommendedAction
-    overwrite_system_decision: bool = False
-    resolution_reason: str
-    resolution_note: str | None = None
+class ConditionSetView(BaseSchema):
+    condition_set_id: str
+    logic: dict[str, Any] = Field(default_factory=dict)
+    note: str | None = None
 
 
-class FeedbackCreateRequest(BaseSchema):
-    feedback_type: FeedbackType
-    target_rule_id: UUID | None = None
-    target_entity_ref_id: str | None = None
-    comment: str | None = None
-    labels: dict[str, Any] = Field(default_factory=dict)
+class EvidenceLinkView(BaseSchema):
+    link_id: str
+    target_type: str
+    target_id: str
+    evidence_id: str
+    support_role: str
+    support_strength: str
+    note: str | None = None
+
+
+class ChangeRecordView(BaseSchema):
+    change_id: str
+    object_type: str
+    object_id: str
+    change_type: str
+    from_version: str | None = None
+    to_version: str
+    change_summary: str
+    reason: str | None = None
+    impact_note: str | None = None
+    created_at: datetime
+    created_by: str
+    review_status: str
+
+
+
+class AssertionBundleView(BaseSchema):
+    assertion: OntologyAssertionView
+    condition: ConditionSetView | None = None
+    evidence_sources: list[EvidenceSourceView] = Field(default_factory=list)
+    evidence_links: list[EvidenceLinkView] = Field(default_factory=list)
+    change_records: list[ChangeRecordView] = Field(default_factory=list)
+
+
+class ConceptBundleView(BaseSchema):
+    concept: OntologyEntityView
+    assertions: list[OntologyAssertionView] = Field(default_factory=list)
+    evidence_sources: list[EvidenceSourceView] = Field(default_factory=list)
+
+
+class ConceptSearchResultView(BaseSchema):
+    concept: OntologyEntityView
+    matched_text: str
+    match_type: str
+    assertion_count: int = 0
+    evidence_count: int = 0
+
+
+class ConceptVerificationView(BaseSchema):
+    concept: OntologyEntityView
+    release_code: str | None = None
+    assertions: list[AssertionBundleView] = Field(default_factory=list)
+    evidence_sources: list[EvidenceSourceView] = Field(default_factory=list)
+    change_records: list[ChangeRecordView] = Field(default_factory=list)
+    related_concepts: list[OntologyEntityView] = Field(default_factory=list)
+
+
+class ReleaseDiffSectionView(BaseSchema):
+    added: list[dict[str, Any]] = Field(default_factory=list)
+    removed: list[dict[str, Any]] = Field(default_factory=list)
+    common_count: int = 0
+
+
+class ReleaseDiffView(BaseSchema):
+    base_release_code: str | None = None
+    target_release_code: str
+    sections: dict[str, ReleaseDiffSectionView] = Field(default_factory=dict)
+    counts: dict[str, dict[str, int]] = Field(default_factory=dict)
+
+
+class ObjectTimelineView(BaseSchema):
+    object_id: str
+    object_type: str | None = None
+    change_records: list[ChangeRecordView] = Field(default_factory=list)
+
+
+
+class OntologyValidationIssueView(BaseSchema):
+    severity: str
+    code: str
+    message: str
+    object_type: str
+    object_id: str | None = None
+
+
+class OntologyValidationReportView(BaseSchema):
+    status: str
+    issue_count: int
+    issues: list[OntologyValidationIssueView] = Field(default_factory=list)
+
+class MentionView(BaseSchema):
+    mention_id: str
+    source_type: str
+    source_record_id: str
+    surface_text: str
+    normalized_text: str
+    start_offset: int
+    end_offset: int
+    mention_type_guess: str | None = None
+    context_window: str | None = None
+    kb_version: str | None = None
+    created_at: datetime
+
+
+class NormalizationDecisionView(BaseSchema):
+    decision_id: str
+    mention_id: str
+    resolved_concept_id: str | None = None
+    canonical_name: str | None = None
+    resolver_type: str
+    resolver_version: str = "normalizer-v1"
+    confidence_score: float = 0.0
+    candidate_list: list[dict[str, Any]] = Field(default_factory=list)
+    decision_reason: str | None = None
+    status: str = "resolved"
+    kb_version: str | None = None
+    created_at: datetime
+
+
+class NormalizationDecisionReviewRequest(BaseSchema):
+    status: Literal["resolved", "rejected"]
+    resolved_concept_id: str | None = None
+    canonical_name: str | None = None
+    create_alias: bool = False
+    reason: str = Field(..., min_length=1)
+    operator_id: str = Field(default="system")
+
+
+class NormalizationDecisionBatchReviewRequest(NormalizationDecisionReviewRequest):
+    decision_ids: list[str] = Field(..., min_length=1)
+
+
+class ConceptAliasReviewRequest(BaseSchema):
+    status: Literal["published", "rejected"]
+    reason: str = Field(..., min_length=1)
+    operator_id: str = Field(default="system")
+
+
+class ConceptProposalCreateRequest(BaseSchema):
+    concept_type: str = Field(..., min_length=1)
+    standard_name: str = Field(..., min_length=1)
+    definition: str = Field(..., min_length=1)
+    evidence_ids: list[str] = Field(..., min_length=1)
+    source_note: str | None = None
+    operator_id: str = Field(default="system")
+
+
+class ConceptProposalReviewRequest(BaseSchema):
+    status: Literal["approved", "rejected"]
+    reason: str = Field(..., min_length=1)
+    operator_id: str = Field(default="system")
+
+
+class StagedAssertionReviewRequest(BaseSchema):
+    status: Literal["accepted", "rejected"]
+    reason: str = Field(..., min_length=1)
+    operator_id: str = Field(default="system")
+
+
+class ConceptProposalView(BaseSchema):
+    proposal_id: str
+    decision_id: str
+    mention_id: str
+    surface_text: str
+    concept_type: str
+    standard_name: str
+    definition: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    evidence_sources: list[dict[str, Any]] = Field(default_factory=list)
+    source_note: str | None = None
+    status: str
+    proposed_concept_id: str | None = None
+    created_at: datetime
+    reviewed_at: datetime | None = None
+    reviewed_by: str | None = None
+    review_reason: str | None = None
+
+
+class TerminologyPublishRequest(BaseSchema):
+    version_id: str = Field(..., min_length=1)
+    version_name: str = Field(..., min_length=1)
+    alias_ids: list[str] = Field(..., min_length=1)
+    change_summary: str
+    operator_id: str = Field(default="system")
 
 
 class RuleCreateRequest(BaseSchema):
@@ -323,6 +524,10 @@ class OntologyImportCreateRequest(BaseSchema):
     source_uri: str
     source_type: str
     target_version_code: str
+    guide_title: str | None = None
+    guide_text: str | None = None
+    guide_file_name: str | None = None
+    guide_file_base64: str | None = None
 
 
 class OntologyImportJobView(BaseSchema):
@@ -338,6 +543,58 @@ class OntologyImportJobView(BaseSchema):
     finished_at: datetime | None = None
 
 
+class ImportGovernanceIssueView(BaseSchema):
+    issue_id: str
+    severity: str
+    status: str
+    code: str
+    title: str
+    message: str
+    object_type: str
+    object_id: str | None = None
+    action: str
+    mention_id: str | None = None
+    surface_text: str | None = None
+    candidate_list: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+    evidence_sources: list[dict[str, Any]] = Field(default_factory=list)
+    resolved_concept_id: str | None = None
+    canonical_name: str | None = None
+
+
+class ImportGovernanceSummaryView(BaseSchema):
+    concepts: int = 0
+    assertions: int = 0
+    evidence: int = 0
+    mentions: int = 0
+    normalizations: int = 0
+    issue_count: int = 0
+    issue_counts_by_severity: dict[str, int] = Field(default_factory=dict)
+    issue_counts_by_status: dict[str, int] = Field(default_factory=dict)
+
+
+class ImportGovernanceView(BaseSchema):
+    import_job: OntologyImportJobView
+    release_code: str
+    summary: ImportGovernanceSummaryView
+    issues: list[ImportGovernanceIssueView] = Field(default_factory=list)
+    staged_assertions: list[AssertionBundleView] = Field(default_factory=list)
+    concept_proposals: list[ConceptProposalView] = Field(default_factory=list)
+
+
+class KnowledgeReleaseView(BaseSchema):
+    release_id: UUID
+    release_code: str
+    kb_version_id: UUID
+    status: str
+    source_type: str
+    timestamps: dict[str, datetime | None] = Field(default_factory=dict)
+    published_at: datetime | None = None
+    validation_report: dict[str, Any] = Field(default_factory=dict)
+    component_counts: dict[str, int] = Field(default_factory=dict)
+    projection_count: int = 0
+
+
 class OntologyEntityView(BaseSchema):
     entity_id: str
     label: str
@@ -347,29 +604,15 @@ class OntologyEntityView(BaseSchema):
     attributes: dict[str, Any] = Field(default_factory=dict)
 
 
-class ReportOverview(BaseSchema):
-    total_requests: int
-    decision_distribution: dict[str, int]
-    review_completion_rate: float
-    overwrite_rate: float
-    api_p95_ms: int
-    fallback_rate: float
+class VectorUpsertRequest(BaseSchema):
+    doc_id: str = Field(..., min_length=1, max_length=128)
+    text: str = Field(..., min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class RuleHitReportItem(BaseSchema):
-    rule_code: str
-    rule_name: str
-    hit_count: int
-    block_count: int
-    review_count: int
-
-
-class ReviewQualityReport(BaseSchema):
-    total_review_tasks: int
-    completed_review_tasks: int
-    feedback_counts: dict[str, int]
-    overwrite_count: int
-    overwrite_rate: float
+class VectorSearchRequest(BaseSchema):
+    query: str = Field(..., min_length=1)
+    top_k: int = Field(default=5, ge=1, le=20)
 
 
 class SuccessEnvelope(BaseSchema):

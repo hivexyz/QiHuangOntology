@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -9,13 +10,13 @@ from fastapi.responses import JSONResponse
 
 from .api.router import api_router
 from .config import get_settings
-from .dependencies import get_store
+from .dependencies import get_exception_mapper, get_store, get_trace_service
 from .exceptions import APIError
-from .schemas import ErrorEnvelope, ErrorInfo
 from .utils import new_trace_id
 
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -27,50 +28,34 @@ async def lifespan(_: FastAPI):
 
 
 async def trace_id_middleware(request: Request, call_next):
+    trace_service = get_trace_service()
     request.state.trace_id = request.headers.get("X-Trace-Id") or new_trace_id()
-    response = await call_next(request)
+    trace_token = trace_service.bind_trace_id(request.state.trace_id)
+    try:
+        response = await call_next(request)
+    finally:
+        trace_service.reset_trace_id(trace_token)
     response.headers["X-Trace-Id"] = request.state.trace_id
     return response
 
 
 async def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
-    payload = ErrorEnvelope(
-        trace_id=getattr(request.state, "trace_id", new_trace_id()),
-        error=ErrorInfo(
-            code=exc.code,
-            message=exc.message,
-            retryable=exc.retryable,
-            details=[
-                {"field": item.get("field"), "message": str(item.get("message"))}
-                for item in exc.details
-            ],
-        ),
-    )
-    return JSONResponse(status_code=exc.status_code, content=payload.model_dump())
+    trace_id = getattr(request.state, "trace_id", new_trace_id())
+    status_code, payload = get_exception_mapper().to_error_envelope(exc, trace_id=trace_id)
+    return JSONResponse(status_code=status_code, content=payload.model_dump())
 
 
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    payload = ErrorEnvelope(
-        trace_id=getattr(request.state, "trace_id", new_trace_id()),
-        error=ErrorInfo(
-            code="invalid_request",
-            message="Request validation failed",
-            retryable=False,
-            details=[
-                {"field": ".".join(str(part) for part in item["loc"]), "message": item["msg"]}
-                for item in exc.errors()
-            ],
-        ),
-    )
-    return JSONResponse(status_code=400, content=payload.model_dump())
+    trace_id = getattr(request.state, "trace_id", new_trace_id())
+    status_code, payload = get_exception_mapper().to_error_envelope(exc, trace_id=trace_id)
+    return JSONResponse(status_code=status_code, content=payload.model_dump())
 
 
 async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    payload = ErrorEnvelope(
-        trace_id=getattr(request.state, "trace_id", new_trace_id()),
-        error=ErrorInfo(code="internal_error", message=str(exc), retryable=False, details=[]),
-    )
-    return JSONResponse(status_code=500, content=payload.model_dump())
+    logger.exception("Unhandled server error", exc_info=exc)
+    trace_id = getattr(request.state, "trace_id", new_trace_id())
+    status_code, payload = get_exception_mapper().to_error_envelope(exc, trace_id=trace_id)
+    return JSONResponse(status_code=status_code, content=payload.model_dump())
 
 
 def create_app() -> FastAPI:

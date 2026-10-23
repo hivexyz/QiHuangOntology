@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from ...dependencies import get_current_user, get_rule_service
+from ...dependencies import get_rule_service, require_permission
 from ...schemas import MetaInfo, RuleCreateRequest, RuleVersionCreateRequest, SuccessEnvelope
 from ...services.rules import RuleService
 
@@ -19,7 +19,7 @@ def list_rules(
     keyword: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
-    _: object = Depends(get_current_user),
+    _: object = Depends(require_permission("rule", "read")),
     rule_service: RuleService = Depends(get_rule_service),
 ) -> SuccessEnvelope:
     data, total, page, total_pages = rule_service.list_rules(page, page_size, rule_type, status, keyword)
@@ -31,7 +31,7 @@ def list_rules(
 def create_rule(
     payload: RuleCreateRequest,
     request: Request,
-    _: object = Depends(get_current_user),
+    _: object = Depends(require_permission("rule", "write")),
     rule_service: RuleService = Depends(get_rule_service),
 ) -> SuccessEnvelope:
     return SuccessEnvelope(trace_id=request.state.trace_id, data=rule_service.create_rule(payload))
@@ -41,7 +41,7 @@ def create_rule(
 def get_rule(
     rule_id: UUID,
     request: Request,
-    _: object = Depends(get_current_user),
+    _: object = Depends(require_permission("rule", "read")),
     rule_service: RuleService = Depends(get_rule_service),
 ) -> SuccessEnvelope:
     return SuccessEnvelope(trace_id=request.state.trace_id, data=rule_service.get_rule(rule_id))
@@ -52,7 +52,7 @@ def create_rule_version(
     rule_id: UUID,
     payload: RuleVersionCreateRequest,
     request: Request,
-    _: object = Depends(get_current_user),
+    _: object = Depends(require_permission("rule", "write")),
     rule_service: RuleService = Depends(get_rule_service),
 ) -> SuccessEnvelope:
     return SuccessEnvelope(trace_id=request.state.trace_id, data=rule_service.create_rule_version(rule_id, payload))
@@ -63,7 +63,7 @@ def publish_rule_version(
     rule_id: UUID,
     rule_version_id: UUID,
     request: Request,
-    _: object = Depends(get_current_user),
+    _: object = Depends(require_permission("rule", "publish")),
     rule_service: RuleService = Depends(get_rule_service),
 ) -> SuccessEnvelope:
     return SuccessEnvelope(trace_id=request.state.trace_id, data=rule_service.publish_rule_version(rule_id, rule_version_id))

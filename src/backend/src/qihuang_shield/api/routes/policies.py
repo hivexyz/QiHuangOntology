@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from ...dependencies import get_current_user, get_policy_service
+from ...dependencies import get_policy_service, require_permission
 from ...schemas import MetaInfo, PolicyCreateRequest, PolicyVersionCreateRequest, SuccessEnvelope
 from ...services.policies import PolicyService
 
@@ -20,7 +20,7 @@ def list_policies(
     keyword: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
-    _: object = Depends(get_current_user),
+    _: object = Depends(require_permission("policy", "read")),
     policy_service: PolicyService = Depends(get_policy_service),
 ) -> SuccessEnvelope:
     data, total, page, total_pages = policy_service.list_policies(page, page_size, tenant_id, status, policy_code, keyword)
@@ -32,7 +32,7 @@ def list_policies(
 def create_policy(
     payload: PolicyCreateRequest,
     request: Request,
-    _: object = Depends(get_current_user),
+    _: object = Depends(require_permission("policy", "write")),
     policy_service: PolicyService = Depends(get_policy_service),
 ) -> SuccessEnvelope:
     return SuccessEnvelope(trace_id=request.state.trace_id, data=policy_service.create_policy(payload))
@@ -42,7 +42,7 @@ def create_policy(
 def get_policy(
     policy_id: UUID,
     request: Request,
-    _: object = Depends(get_current_user),
+    _: object = Depends(require_permission("policy", "read")),
     policy_service: PolicyService = Depends(get_policy_service),
 ) -> SuccessEnvelope:
     return SuccessEnvelope(trace_id=request.state.trace_id, data=policy_service.get_policy(policy_id))
@@ -53,7 +53,7 @@ def create_policy_version(
     policy_id: UUID,
     payload: PolicyVersionCreateRequest,
     request: Request,
-    _: object = Depends(get_current_user),
+    _: object = Depends(require_permission("policy", "write")),
     policy_service: PolicyService = Depends(get_policy_service),
 ) -> SuccessEnvelope:
     return SuccessEnvelope(trace_id=request.state.trace_id, data=policy_service.create_policy_version(policy_id, payload))
@@ -64,7 +64,7 @@ def publish_policy_version(
     policy_id: UUID,
     policy_version_id: UUID,
     request: Request,
-    _: object = Depends(get_current_user),
+    _: object = Depends(require_permission("policy", "publish")),
     policy_service: PolicyService = Depends(get_policy_service),
 ) -> SuccessEnvelope:
     return SuccessEnvelope(trace_id=request.state.trace_id, data=policy_service.publish_policy_version(policy_id, policy_version_id))

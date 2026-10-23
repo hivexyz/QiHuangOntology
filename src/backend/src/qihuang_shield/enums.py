@@ -42,15 +42,6 @@ class BatchStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
-class ReviewTaskStatus(StrEnum):
-    PENDING = "pending"
-    CLAIMED = "claimed"
-    IN_REVIEW = "in_review"
-    COMPLETED = "completed"
-    ESCALATED = "escalated"
-    CLOSED = "closed"
-
-
 class KBVersionStatus(StrEnum):
     DRAFT = "draft"
     PUBLISHED = "published"
@@ -105,15 +96,6 @@ class RecommendedAction(StrEnum):
     BLOCK_OR_MANUAL_CONFIRM = "block_or_manual_confirm"
 
 
-class FeedbackType(StrEnum):
-    FALSE_POSITIVE = "false_positive"
-    FALSE_NEGATIVE = "false_negative"
-    ENTITY_ERROR = "entity_error"
-    RULE_NOT_APPLICABLE = "rule_not_applicable"
-    EXPLANATION_UNCLEAR = "explanation_unclear"
-    OTHER = "other"
-
-
 class RoleCode(StrEnum):
     REVIEWER = "reviewer"
     EXPERT = "expert"
@@ -125,10 +107,17 @@ class RoleCode(StrEnum):
 
 class EntityLabel(StrEnum):
     MATERIAL = "Material"
+    HERB = "Herb"
+    FORMULA = "Formula"
     ALIAS = "Alias"
     DISEASE = "Disease"
     SYMPTOM = "Symptom"
     EFFECT = "Effect"
+    PATTERN = "Pattern"
+    PATHOGENESIS = "Pathogenesis"
+    TREATMENT_METHOD = "TreatmentMethod"
+    TREATMENT_PRINCIPLE = "TreatmentPrinciple"
+    USAGE_METHOD = "UsageMethod"
     POPULATION = "Population"
     CONTEXT = "Context"
     RULE_ANCHOR = "RuleAnchor"
